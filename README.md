@@ -20,6 +20,7 @@ Following are the prerequisites for building Stressgrid generator and coordinato
 
 - Elixir 1.7
 - GNU C compiler (for HDR histograms)
+- Node.js 8.12.0 (for management UI)
 
 To build the coordinator:
 
