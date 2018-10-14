@@ -23,13 +23,15 @@ Following are the prerequisites for building Stressgrid generator and coordinato
 
 To build the coordinator:
 
-    $ cd coordinator
+    $ cd coordinator/management/
+    $ npm install && npm run build
+    $ cd ..
     $ MIX_ENV=prod mix deps.get
     $ MIX_ENV=prod mix release --env=prod
 
 To build the generator:
 
-    $ cd generator
+    $ cd generator/
     $ MIX_ENV=prod mix deps.get
     $ MIX_ENV=prod mix release --env=prod
 
