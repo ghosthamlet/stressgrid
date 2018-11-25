@@ -28,13 +28,13 @@ To build the coordinator:
     $ npm install && npm run build
     $ cd ..
     $ MIX_ENV=prod mix deps.get
-    $ MIX_ENV=prod mix release --env=prod
+    $ MIX_ENV=prod mix release
 
 To build the generator:
 
     $ cd generator/
     $ MIX_ENV=prod mix deps.get
-    $ MIX_ENV=prod mix release --env=prod
+    $ MIX_ENV=prod mix release
 
 
 # Running the coordinator
@@ -43,13 +43,13 @@ To start the coordinator in the background, run:
 
     $ _build/prod/rel/coordinator/bin/coordinator start
 
-When started, it opens port 8001 for the management website, and port 8000 for generators to connect. If you are running in AWS, you need to make sure that security groups are set up to the following:
+When started, it opens port 8000 for the management website, and port 9696 for generators to connect. If you are running in AWS, you need to make sure that security groups are set up to the following:
 
-- your browser is enabled to connect to port 8001 of the coordinator;
-- generators are enabled to connect to port 8000 of the coordinator;
+- your browser is enabled to connect to port 8000 of the coordinator;
+- generators are enabled to connect to port 9696 of the coordinator;
 - generators are enabled to connect to your target instances.
 
-When using the CloudWatch report writer, you will need AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables, or your EC2 instance should have an IAM role associated with it. The only required permission is `cloudwatch:PutMetricData`. You also may add CW_REGION to the environment to specify in which region you would like to see the metrics.
+To enable CloudWatch report writer you need to set CW_REGION to the environment to specify in which region you would like metrics to be written. You will also need AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables, or your EC2 instance should have an IAM role associated with it. The only required permission is `cloudwatch:PutMetricData`.
 
 # Running the generator(s)
 
@@ -57,13 +57,13 @@ For realistic workloads, you will need multiple generators, each running on a de
 
     $ _build/prod/rel/generator/bin/generator start
 
-The environment variable COORDINATOR_URL is required to specify the coordinator WebSocket URL, e.g. ws://10.0.0.100:8000. Note that you may need to adjust Linux kernel settings for optimal generator performance.
+The environment variable COORDINATOR_URL is required to specify the coordinator WebSocket URL, e.g. ws://10.0.0.100:9696. Note that you may need to adjust Linux kernel settings for optimal generator performance.
 
 # Creating EC2 AMIs for generator and coordinator
 
 To simplify running Stressgrid in EC2, we added [packer](https://www.packer.io/) scripts to create prebaked machine images.
 
-By default, Stressgrid images are based on Debian 9 (Stretch), so you will need the same OS to build the binary releases before running packer scripts, because it simply copies the release. The packer script also includes the necessary Linux kernel settings and the Systemd service. See packer documentation for [necessary AWS permissions](https://www.packer.io/docs/builders/amazon.html#iam-task-or-instance-role).
+By default, Stressgrid images are based on Ubuntu 18.04, so you will need the same OS to build the binary releases before running packer scripts, because it simply copies the release. The packer script also includes the necessary Linux kernel settings and the Systemd service. See packer documentation for [necessary AWS permissions](https://www.packer.io/docs/builders/amazon.html#iam-task-or-instance-role).
 
 To create an AMI for the coordinator:
 
@@ -72,7 +72,7 @@ To create an AMI for the coordinator:
 
 To create an AMI for the generator:
 
-    $ cd coordinator
+    $ cd generator
     $ ./packer.sh
 
 When launching coordinator and generator instances, you will need to pass the corresponding configuration using [EC2 user data](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html).
@@ -80,13 +80,13 @@ When launching coordinator and generator instances, you will need to pass the co
 Example for the coordinator:
 
     #!/bin/bash
-    echo "CW_REGION=us-west-1" > /etc/default/sg-coordinator.env
-    service sg-coordinator restart
+    echo "CW_REGION=us-west-1" > /etc/default/stressgrid-coordinator.env
+    service stressgrid-coordinator restart
 
 Example for the generator:
 
     #!/bin/bash
-    echo "COORDINATOR_URL=ws://ip-172-31-22-7.us-west-1.compute.internal:8000" > /etc/default/sg-generator.env
-    service sg-generator restart
+    echo "COORDINATOR_URL=ws://ip-172-31-22-7.us-west-1.compute.internal:9696" > /etc/default/stressgrid-generator.env
+    service stressgrid-generator restart
 
 For generators, you may use the EC2 autoscale group to launch and manage the entire fleet.
