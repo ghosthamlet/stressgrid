@@ -12,7 +12,7 @@ import { Ws } from './Ws';
 
 const defaultScript = `0..100 |> Enum.each(fn _ ->
   get("/")
-  delay(100, 0.1)
+  delay(900, 0.1)
 end)`;
 
 interface IAppProps {
