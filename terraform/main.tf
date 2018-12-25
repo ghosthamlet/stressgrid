@@ -11,7 +11,8 @@ variable "key_name" {
 }
 
 variable "capacity" {
-  type = "string"
+  type    = "string"
+  default = "4"
 }
 
 provider "aws" {
