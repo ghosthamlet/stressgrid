@@ -15,7 +15,13 @@ defmodule Dummy.Application do
     children = [
       %{
         id: :dummy,
-        start: {:cowboy, :start_clear, [:dummy, [port: 5000], %{env: %{dispatch: dispatch}}]},
+        start:
+          {:cowboy, :start_clear,
+           [
+             :dummy,
+             %{max_connections: 999_999, socket_opts: [port: 5000]},
+             %{max_keepalive: 1_000, env: %{dispatch: dispatch}}
+           ]},
         restart: :permanent,
         shutdown: :infinity,
         type: :supervisor
