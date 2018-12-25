@@ -69,6 +69,10 @@ defmodule Stressgrid.Coordinator.CloudWatchReportWriter do
     result_info |> Map.merge(%{"cw_url" => cw_url})
   end
 
+  def put_metric_data(_, []) do
+    :ok
+  end
+
   def put_metric_data(region, datum) do
     params = %{
       "Action" => "PutMetricData",
