@@ -16,7 +16,10 @@
       },
       "instance_type": "t2.micro",
       "ssh_username": "ubuntu",
-      "ami_name": "stressgrid-coordinator-{{user `git_hash`}}"
+      "ami_name": "stressgrid-coordinator-{{user `git_hash`}}",
+      "ami_description": "Stressgrid Coordinator ({{user `git_hash`}})",
+      "ami_regions": ["us-east-1", "us-east-2", "us-west-2"],
+      "ami_groups": ["all"]
     }
   ],
   "provisioners": [
