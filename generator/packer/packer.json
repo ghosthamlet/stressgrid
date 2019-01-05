@@ -11,12 +11,15 @@
           "name": "ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-*",
           "root-device-type": "ebs"
         },
-        "owners": ["679593333241"],
+        "owners": ["099720109477"],
         "most_recent": true
       },
       "instance_type": "t2.micro",
       "ssh_username": "ubuntu",
-      "ami_name": "stressgrid-generator-{{user `git_hash`}}"
+      "ami_name": "stressgrid-generator-{{user `git_hash`}}",
+      "ami_description": "Stressgrid Generator ({{user `git_hash`}})",
+      "ami_regions": ["us-east-1", "us-east-2", "us-west-2"],
+      "ami_groups": ["all"]
     }
   ],
   "provisioners": [
