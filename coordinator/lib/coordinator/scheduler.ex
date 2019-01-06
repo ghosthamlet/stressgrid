@@ -146,7 +146,7 @@ defmodule Stressgrid.Coordinator.Scheduler do
       |> Enum.zip(blocks |> Utils.split_blocks(ramp_steps))
       |> Enum.reduce({ts, timer_refs}, fn {i, blocks}, {ts, timer_refs} ->
         {ts + rampup_step_ms,
-         [schedule_op(ts, id, {:start_cohort, "#{id}-#{i}", blocks, addresses}) | timer_refs]}
+         [schedule_op(ts, id, {:start_cohort, "#{id}-#{i - 1}", blocks, addresses}) | timer_refs]}
       end)
 
     timer_refs = [schedule_status(ts, id, :sustain, sustain_ms) | timer_refs]
@@ -156,7 +156,8 @@ defmodule Stressgrid.Coordinator.Scheduler do
     {ts, timer_refs} =
       ramp_steps..1
       |> Enum.reduce({ts, timer_refs}, fn i, {ts, timer_refs} ->
-        {ts + rampdown_step_ms, [schedule_op(ts, id, {:stop_cohort, "#{id}-#{i}"}) | timer_refs]}
+        {ts + rampdown_step_ms,
+         [schedule_op(ts, id, {:stop_cohort, "#{id}-#{i - 1}"}) | timer_refs]}
       end)
 
     timer_refs = [schedule_op(ts, id, :stop) | timer_refs]

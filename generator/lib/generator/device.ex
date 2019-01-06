@@ -30,6 +30,8 @@ defmodule Stressgrid.Generator.Device do
   def init(args) do
     _ = Kernel.send(self(), :init)
 
+    Logger.debug("Init device #{args |> Keyword.fetch!(:id)}")
+
     {:ok,
      %Device{
        address: args |> Keyword.fetch!(:address),
@@ -98,7 +100,7 @@ defmodule Stressgrid.Generator.Device do
   end
 
   def handle_info(:init, %Device{conn_pid: nil, address: {:tcp, host, port}} = device) do
-    Logger.debug("Open gun")
+    Logger.debug("Open gun #{host}:#{port}")
 
     ts = :os.system_time(:micro_seconds)
 

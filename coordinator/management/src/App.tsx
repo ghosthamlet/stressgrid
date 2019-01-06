@@ -95,8 +95,9 @@ class App extends React.Component<IAppProps, IAppState> {
                 <div className="row">
                   <div className="col">
                     <div className="form-group">
-                      <label htmlFor="host">Target host</label>
+                      <label htmlFor="host">Target host(s)</label>
                       <input className="form-control" id="host" type="text" ref={this.hostInputRef} defaultValue="localhost" />
+                      <small id="passwordHelpBlock" className="form-text text-muted">Comma separated</small>
                     </div>
                   </div>
                   <div className="col">
@@ -255,10 +256,12 @@ class App extends React.Component<IAppProps, IAppState> {
         if (isNaN(rampupStepMs) || rampupStepMs <= 0) { throw new Error('Ramup duration is invalid'); }
         if (isNaN(sustainMs) || sustainMs <= 0) { throw new Error('Sustain duration is invalid'); }
         ws.run({
-          addresses: [{
-            host: hostInput.value,
-            port
-          }],
+          addresses: _.map(_.split(hostInput.value, ","), host => {
+            return {
+              host: _.trim(host),
+              port
+            };
+          }),
           blocks: [{
             params: JSON.parse(paramsText.value),
             script: scriptText.value,

@@ -153,6 +153,7 @@ defmodule Stressgrid.Coordinator.ManagementConnection do
             acc
         end
       end)
+      |> Enum.reverse()
 
     addresses =
       addresses_json
@@ -181,6 +182,7 @@ defmodule Stressgrid.Coordinator.ManagementConnection do
             acc
         end
       end)
+      |> Enum.reverse()
 
     :ok = Scheduler.start_run(id, name, blocks, addresses, opts)
     connection

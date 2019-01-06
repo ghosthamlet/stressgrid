@@ -172,27 +172,29 @@ defmodule Stressgrid.Generator.Connection do
        when is_binary(id) and is_list(blocks) do
     {:ok, cohort_pid} = Cohort.Supervisor.start_child(id)
 
-    [address] = addresses
+    blocks
+    |> Enum.reduce(0, fn %{script: script} = block, i when is_binary(script) ->
+      params = block |> Map.get(:params, %{})
+      size = block |> Map.get(:size, 1)
 
-    :ok =
-      blocks
-      |> Enum.each(fn %{script: script} = block when is_binary(script) ->
-        params = block |> Map.get(:params, %{})
-        size = block |> Map.get(:size, 1)
+      1..size
+      |> Enum.reduce(i, fn _, i ->
+        address =
+          addresses
+          |> Enum.at(rem(i, length(addresses)))
 
-        :ok =
-          1..size
-          |> Enum.each(fn i ->
-            {:ok, _} =
-              Device.Supervisor.start_child(
-                cohort_pid,
-                "#{id}-#{i}",
-                address,
-                script,
-                params
-              )
-          end)
+        {:ok, _} =
+          Device.Supervisor.start_child(
+            cohort_pid,
+            "#{id}-#{i}",
+            address,
+            script,
+            params
+          )
+
+        i + 1
       end)
+    end)
 
     %{connection | cohorts: cohorts |> Map.put(id, cohort_pid)}
   end
