@@ -51,13 +51,9 @@ defmodule Stressgrid.Coordinator.CloudWatchReportWriter do
 
     put_metric_data(
       region,
-      active_counts
-      |> Enum.map(fn {generator, active_count} ->
-        {:scalar, :active_count, :count, active_count, [run: id, generator: generator]}
-      end)
-      |> Enum.concat([
+      [
         {:scalar, :total_active_count, :count, total_active_count, [run: id]}
-      ])
+      ]
     )
   end
 
