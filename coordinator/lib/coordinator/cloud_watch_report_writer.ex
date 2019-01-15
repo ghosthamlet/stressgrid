@@ -5,6 +5,8 @@ defmodule Stressgrid.Coordinator.CloudWatchReportWriter do
 
   @behaviour ReportWriter
 
+  require Logger
+
   defstruct [:region]
 
   def init(region) do
@@ -113,15 +115,20 @@ defmodule Stressgrid.Coordinator.CloudWatchReportWriter do
            |> Map.merge(dim_params(prefix, dims))}
       end)
 
-    %{status_code: 200} =
-      %ExAws.Operation.Query{
-        path: "/",
-        params: params,
-        service: :monitoring,
-        action: :put_metric_data,
-        parser: &ExAws.Cloudwatch.Parsers.parse/2
-      }
-      |> ExAws.request!(region: region)
+    case %ExAws.Operation.Query{
+           path: "/",
+           params: params,
+           service: :monitoring,
+           action: :put_metric_data,
+           parser: &ExAws.Cloudwatch.Parsers.parse/2
+         }
+         |> ExAws.request(region: region) do
+      {:ok, _} ->
+        Logger.debug("CloudWatch written successfully")
+
+      {:error, error} ->
+        Logger.error("CloudWatch error writing #{inspect(error)}")
+    end
 
     :ok
   end
