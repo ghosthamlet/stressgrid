@@ -1,4 +1,4 @@
-[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/stressgrid_gitlab/community?utm_source=share-link&utm_medium=link&utm_campaign=share-link)
+[![Telegram](https://img.shields.io/badge/telegram-join%20channel-98B919.svg)](https://t.me/stressgrid)
 
 # Overview
 
