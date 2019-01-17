@@ -1,4 +1,4 @@
-[![Telegram](https://img.shields.io/badge/telegram-join%20channel-0088CC.svg)](https://t.me/stressgrid)
+[![Telegram](https://img.shields.io/badge/telegram-join%20channel-0088CC.svg)](https://t.me/joinchat/Lx57txRJiNi1ciJuxKFFgg)
 [![Freenode](https://img.shields.io/badge/freenode-join%20%23stressgrid-brightgreen.svg)](irc:freenode.net/channel/stressgrid)
 
 # Overview
