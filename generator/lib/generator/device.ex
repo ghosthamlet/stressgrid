@@ -14,7 +14,7 @@ defmodule Stressgrid.Generator.Device do
             task: nil,
             hists: %{},
             counters: %{},
-            last_ts: 0,
+            last_ts: nil,
             conn_pid: nil,
             conn_ref: nil,
             request_from: nil,
@@ -89,17 +89,22 @@ defmodule Stressgrid.Generator.Device do
   def handle_call(
         {:request, method, path, headers, body},
         request_from,
-        %Device{conn_pid: conn_pid, stream_ref: nil, request_from: nil} = device
+        %Device{conn_pid: conn_pid, stream_ref: nil, request_from: nil, last_ts: nil} = device
       ) do
     Logger.debug("Starting request #{method} #{path}")
 
+    ts = :os.system_time(:micro_seconds)
+
     stream_ref = :gun.request(conn_pid, method, path, headers, body)
 
-    device = %{device | stream_ref: stream_ref, request_from: request_from}
+    device = %{device | stream_ref: stream_ref, request_from: request_from, last_ts: ts}
     {:noreply, device}
   end
 
-  def handle_info(:init, %Device{conn_pid: nil, address: {:tcp, host, port}} = device) do
+  def handle_info(
+        :init,
+        %Device{conn_pid: nil, address: {:tcp, host, port}, last_ts: nil} = device
+      ) do
     Logger.debug("Open gun #{host}:#{port}")
 
     ts = :os.system_time(:micro_seconds)
@@ -134,7 +139,8 @@ defmodule Stressgrid.Generator.Device do
           conn_pid: conn_pid,
           last_ts: last_ts
         } = device
-      ) do
+      )
+      when last_ts != nil do
     Logger.debug("Gun up")
 
     ts = :os.system_time(:micro_seconds)
@@ -203,7 +209,7 @@ defmodule Stressgrid.Generator.Device do
       end)
 
     {:noreply,
-     %{device | last_ts: ts, task: task}
+     %{device | last_ts: nil, task: task}
      |> record_hist(:conn_us, ts - last_ts)}
   end
 
@@ -228,7 +234,8 @@ defmodule Stressgrid.Generator.Device do
           stream_ref: stream_ref,
           last_ts: last_ts
         } = device
-      ) do
+      )
+      when last_ts != nil do
     ts = :os.system_time(:micro_seconds)
 
     device =
@@ -253,7 +260,8 @@ defmodule Stressgrid.Generator.Device do
           response_iodata: response_iodata,
           last_ts: last_ts
         } = device
-      ) do
+      )
+      when last_ts != nil do
     ts = :os.system_time(:micro_seconds)
 
     device = %{device | response_iodata: [data | response_iodata]}
@@ -388,7 +396,8 @@ defmodule Stressgrid.Generator.Device do
         stream_ref: nil,
         response_status: nil,
         response_headers: nil,
-        response_iodata: nil
+        response_iodata: nil,
+        last_ts: nil
     }
   end
 
@@ -415,7 +424,8 @@ defmodule Stressgrid.Generator.Device do
         stream_ref: nil,
         response_status: nil,
         response_headers: nil,
-        response_iodata: nil
+        response_iodata: nil,
+        last_ts: nil
     }
   end
 
