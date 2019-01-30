@@ -12,7 +12,17 @@ variable "key_name" {
 
 variable "capacity" {
   type    = "string"
-  default = "4"
+  default = "2"
+}
+
+variable "generator_instance_type" {
+  type    = "string"
+  default = "c5.2xlarge"
+}
+
+variable "coordinator_instance_type" {
+  type    = "string"
+  default = "t2.micro"
 }
 
 provider "aws" {
@@ -125,7 +135,7 @@ resource "aws_iam_instance_profile" "coordinator" {
 
 resource "aws_instance" "coordinator" {
   ami                         = "${data.aws_ami.coordinator.id}"
-  instance_type               = "t2.micro"
+  instance_type               = "${var.coordinator_instance_type}"
   key_name                    = "${var.key_name}"
   user_data                   = "${data.template_file.coordinator_init.rendered}"
   iam_instance_profile        = "${aws_iam_instance_profile.coordinator.id}"
@@ -145,7 +155,7 @@ output "coordinator_url" {
 resource "aws_launch_configuration" "generator" {
   name                        = "stressgrid-generator"
   image_id                    = "${data.aws_ami.generator.id}"
-  instance_type               = "c5.2xlarge"
+  instance_type               = "${var.generator_instance_type}"
   key_name                    = "${var.key_name}"
   user_data                   = "${data.template_file.generator_init.rendered}"
   security_groups             = ["${aws_security_group.generator.id}"]
