@@ -146,6 +146,7 @@ defmodule Stressgrid.Coordinator.CsvReportWriter do
         |> Enum.reduce(keys, fn {key, _}, keys -> [key | keys] end)
         |> Enum.uniq()
       end)
+      |> Enum.sort()
 
     keys_string =
       keys
@@ -155,6 +156,7 @@ defmodule Stressgrid.Coordinator.CsvReportWriter do
     io_data =
       ["clock,#{keys_string}\r\n"] ++
         (table
+         |> Enum.sort_by(fn {clock, _} -> clock end)
          |> Enum.map(fn {clock, row} ->
            values_string =
              keys
