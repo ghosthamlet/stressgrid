@@ -86,6 +86,10 @@ defmodule Stressgrid.Generator.Device do
     {:reply, {:ok, task != nil, hists, counters}, %{device | counters: reset_counters}}
   end
 
+  def handle_call({:request, _, _, _, _}, _, %Device{conn_pid: nil} = device) do
+    {:reply, {:error, :disconnected}, device}
+  end
+
   def handle_call(
         {:request, method, path, headers, body},
         request_from,
