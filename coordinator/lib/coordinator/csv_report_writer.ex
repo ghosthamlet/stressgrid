@@ -8,85 +8,118 @@ defmodule Stressgrid.Coordinator.CsvReportWriter do
   @management_base "priv/management"
   @results_base "results"
 
+  defstruct metrics_table: %{},
+            utilization_table: %{},
+            active_counts_table: %{}
+
   def init() do
-    CsvReportWriter
+    %CsvReportWriter{}
   end
 
-  def write_hists(id, clock, _, hists) do
-    hists
-    |> Enum.each(fn {key, hist} ->
-      if :hdr_histogram.get_total_count(hist) != 0 do
-        file_name = Path.join([ensure_temporary_directory(id), "#{key}.csv"])
+  def write_hists(_, clock, %CsvReportWriter{metrics_table: metrics_table} = writer, hists) do
+    row =
+      hists
+      |> Enum.filter(fn {_, hist} ->
+        :hdr_histogram.get_total_count(hist) != 0
+      end)
+      |> Enum.map(fn {key, hist} ->
         mean = :hdr_histogram.mean(hist)
         stddev = :hdr_histogram.stddev(hist)
-
-        if not File.exists?(file_name) do
-          File.write!(file_name, "clock,#{key},#{key}_s\r\n", [:append])
-        end
-
-        File.write!(file_name, "#{clock},#{mean},#{stddev}\r\n", [:append])
-      end
-    end)
-  end
-
-  def write_scalars(id, clock, _, scalars) do
-    scalars
-    |> Enum.each(fn {key, value} ->
-      file_name = Path.join([ensure_temporary_directory(id), "#{key}.csv"])
-
-      if not File.exists?(file_name) do
-        File.write!(file_name, "clock,#{key}\r\n", [:append])
-      end
-
-      File.write!(file_name, "#{clock},#{value}\r\n", [:append])
-    end)
-  end
-
-  def write_utilizations(id, clock, _, utilizations) do
-    file_name = Path.join([ensure_temporary_directory(id), "utilization.csv"])
-
-    if not File.exists?(file_name) do
-      keys =
-        utilizations
-        |> Enum.map(fn {key, _} -> ["#{key}_cpu", "#{key}_network_rx", "#{key}_network_tx"] end)
-        |> Enum.concat()
-        |> Enum.join(",")
-
-      File.write!(file_name, "clock,#{keys}\r\n", [:append])
-    end
-
-    values =
-      utilizations
-      |> Enum.map(fn {_, %{cpu: cpu, network_rx: network_rx, network_tx: network_tx}} ->
-        ["#{cpu}", "#{network_rx}", "#{network_tx}"]
+        [{key, mean}, {:"#{key}_stddev", stddev}]
       end)
       |> Enum.concat()
-      |> Enum.join(",")
+      |> Map.new()
+      |> Map.merge(metrics_table |> Map.get(clock, %{}))
 
-    File.write!(file_name, "#{clock},#{values}\r\n", [:append])
+    %{writer | metrics_table: metrics_table |> Map.put(clock, row)}
   end
 
-  def write_active_counts(id, clock, _, active_counts) do
-    file_name = Path.join([ensure_temporary_directory(id), "active_counts.csv"])
+  def write_scalars(_, clock, %CsvReportWriter{metrics_table: metrics_table} = writer, scalars) do
+    row =
+      scalars
+      |> Map.new()
+      |> Map.merge(metrics_table |> Map.get(clock, %{}))
 
-    if not File.exists?(file_name) do
-      keys =
+    %{writer | metrics_table: metrics_table |> Map.put(clock, row)}
+  end
+
+  def write_utilizations(
+        _,
+        clock,
+        %CsvReportWriter{utilization_table: utilization_table} = writer,
+        utilizations
+      ) do
+    utilization_count = Enum.count(utilizations)
+
+    average_cpu =
+      if utilization_count === 0 do
+        0
+      else
+        (utilizations
+         |> Enum.map(fn {_, %{cpu: cpu}} -> cpu end)
+         |> Enum.sum()) / utilization_count
+      end
+
+    total_network_rx =
+      utilizations
+      |> Enum.map(fn {_, %{network_rx: network_rx}} -> network_rx end)
+      |> Enum.sum()
+
+    total_network_tx =
+      utilizations
+      |> Enum.map(fn {_, %{network_tx: network_tx}} -> network_tx end)
+      |> Enum.sum()
+
+    row =
+      utilizations
+      |> Enum.map(fn {generator, %{cpu: cpu, network_rx: network_rx, network_tx: network_tx}} ->
+        [
+          {:"#{generator}_cpu", cpu},
+          {:"#{generator}_network_rx", network_rx},
+          {:"#{generator}_network_tx", network_tx}
+        ]
+      end)
+      |> Enum.concat()
+      |> Map.new()
+      |> Map.put(:average_cpu, average_cpu)
+      |> Map.put(:total_network_rx, total_network_rx)
+      |> Map.put(:total_network_tx, total_network_tx)
+
+    %{writer | utilization_table: utilization_table |> Map.put(clock, row)}
+  end
+
+  def write_active_counts(
+        _,
+        clock,
+        %CsvReportWriter{active_counts_table: active_counts_table} = writer,
         active_counts
-        |> Enum.map(fn {key, _} -> "#{key}" end)
-        |> Enum.join(",")
-
-      File.write!(file_name, "clock,#{keys}\r\n", [:append])
-    end
-
+      ) do
     values =
       active_counts
-      |> Enum.map(fn {_, v} -> "#{v}" end)
-      |> Enum.join(",")
+      |> Enum.map(fn {_, v} -> v end)
 
-    File.write!(file_name, "#{clock},#{values}\r\n", [:append])
+    total = values |> Enum.sum()
+
+    row =
+      active_counts
+      |> Map.new()
+      |> Map.put(:total, total)
+
+    %{writer | active_counts_table: active_counts_table |> Map.put(clock, row)}
   end
 
-  def finish(result_info, id, _) do
+  def finish(result_info, id, %CsvReportWriter{
+        metrics_table: metrics_table,
+        utilization_table: utilization_table,
+        active_counts_table: active_counts_table
+      }) do
+    tmp_directory = Path.join([System.tmp_dir(), id])
+    File.mkdir_p!(tmp_directory)
+
+    write_csv(metrics_table, Path.join([tmp_directory, "metrics.csv"]))
+    write_csv(utilization_table, Path.join([tmp_directory, "utilization.csv"]))
+    write_csv(active_counts_table, Path.join([tmp_directory, "active_counts.csv"]))
+
     filename = "#{id}.tar.gz"
     directory = Path.join([Application.app_dir(:coordinator), @management_base, @results_base])
     File.mkdir_p!(directory)
@@ -105,9 +138,41 @@ defmodule Stressgrid.Coordinator.CsvReportWriter do
     result_info
   end
 
-  defp ensure_temporary_directory(id) do
-    directory = Path.join([System.tmp_dir(), id])
-    File.mkdir_p!(directory)
-    directory
+  defp write_csv(table, file_name) do
+    keys =
+      table
+      |> Enum.reduce([], fn {_, row}, keys ->
+        row
+        |> Enum.reduce(keys, fn {key, _}, keys -> [key | keys] end)
+        |> Enum.uniq()
+      end)
+
+    keys_string =
+      keys
+      |> Enum.map(&"#{&1}")
+      |> Enum.join(",")
+
+    io_data =
+      ["clock,#{keys_string}\r\n"] ++
+        (table
+         |> Enum.map(fn {clock, row} ->
+           values_string =
+             keys
+             |> Enum.map(fn key ->
+               case row |> Map.get(key) do
+                 nil ->
+                   ""
+
+                 value ->
+                   "#{value}"
+               end
+             end)
+             |> Enum.join(",")
+
+           "#{clock},#{values_string}\r\n"
+         end)
+         |> Enum.to_list())
+
+    File.write!(file_name, io_data)
   end
 end

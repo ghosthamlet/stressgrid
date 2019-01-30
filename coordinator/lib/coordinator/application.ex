@@ -18,20 +18,20 @@ defmodule Stressgrid.Coordinator.Application do
     generators_port = System.get_env() |> Map.get("PORT", "9696") |> String.to_integer()
     management_port = System.get_env() |> Map.get("PORT", "8000") |> String.to_integer()
 
-    writers =
-      [CsvReportWriter.init()] ++
+    writer_configs =
+      [{CsvReportWriter, []}] ++
         case cloudwatch_region() do
           nil ->
             []
 
           cloudwatch_region ->
-            [CloudWatchReportWriter.init(cloudwatch_region)]
+            [{CloudWatchReportWriter, [cloudwatch_region]}]
         end
 
     children = [
       {Registry, keys: :duplicate, name: ManagementConnection},
       GeneratorRegistry,
-      {Reporter, writers: writers},
+      {Reporter, writer_configs: writer_configs},
       Scheduler,
       cowboy_sup(:generators_listener, generators_port, generators_dispatch()),
       cowboy_sup(:management_listener, management_port, management_dispatch())

@@ -3,7 +3,7 @@ defmodule Stressgrid.Coordinator.Reporter do
 
   alias Stressgrid.Coordinator.{Reporter, ManagementConnection}
 
-  defstruct writers: [],
+  defstruct writer_configs: [],
             conn_utilizations: %{},
             conn_active_counts: %{},
             runs: %{},
@@ -18,7 +18,8 @@ defmodule Stressgrid.Coordinator.Reporter do
               hists: %{},
               counters: %{},
               prev_counters: %{},
-              max_utilization: nil
+              max_utilization: nil,
+              writers: []
   end
 
   defmodule Report do
@@ -92,7 +93,7 @@ defmodule Stressgrid.Coordinator.Reporter do
   def init(args) do
     {:ok, _} = :timer.send_interval(@report_interval, :report)
     {:ok, _} = :timer.send_interval(@notify_interval, :notify)
-    {:ok, %Reporter{writers: args |> Keyword.get(:writers, [])}}
+    {:ok, %Reporter{writer_configs: args |> Keyword.get(:writer_configs, [])}}
   end
 
   def handle_call(
@@ -183,21 +184,27 @@ defmodule Stressgrid.Coordinator.Reporter do
 
   def handle_cast(
         {:start_run, id, name},
-        %Reporter{runs: runs} = reporter
+        %Reporter{runs: runs, writer_configs: writer_configs} = reporter
       ) do
-    {:noreply, %{reporter | runs: runs |> Map.put(id, %Run{name: name})}}
+    writers =
+      writer_configs
+      |> Enum.map(fn {module, params} ->
+        Kernel.apply(module, :init, params)
+      end)
+
+    {:noreply, %{reporter | runs: runs |> Map.put(id, %Run{name: name, writers: writers})}}
   end
 
   def handle_cast(
         {:stop_run, id},
-        %Reporter{runs: runs, reports: reports, writers: writers} = reporter
+        %Reporter{runs: runs, reports: reports, writer_configs: writer_configs} = reporter
       ) do
     case runs |> Map.get(id) do
-      %Run{name: name, max_utilization: max_utilization} ->
+      %Run{name: name, max_utilization: max_utilization, writers: writers} ->
         result_json =
-          writers
-          |> Enum.reduce(%{}, fn writer, r ->
-            Kernel.apply(writer_module(writer), :finish, [r, id, writer])
+          Enum.zip(writer_configs, writers)
+          |> Enum.reduce(%{}, fn {{module, _}, writer}, r ->
+            Kernel.apply(module, :finish, [r, id, writer])
           end)
 
         report = %Report{name: name, max_utilization: max_utilization, result_json: result_json}
@@ -261,7 +268,7 @@ defmodule Stressgrid.Coordinator.Reporter do
   def handle_info(
         :report,
         %Reporter{
-          writers: writers,
+          writer_configs: writer_configs,
           conn_utilizations: conn_utilizations,
           conn_active_counts: conn_active_counts,
           runs: runs
@@ -274,7 +281,8 @@ defmodule Stressgrid.Coordinator.Reporter do
                         clock: clock,
                         counters: counters,
                         prev_counters: prev_counters,
-                        hists: hists
+                        hists: hists,
+                        writers: writers
                       } = run} ->
         rates =
           prev_counters
@@ -292,14 +300,13 @@ defmodule Stressgrid.Coordinator.Reporter do
           counters
           |> Map.merge(rates)
 
-        :ok =
-          writers
-          |> Enum.each(fn writer ->
-            module = writer_module(writer)
-            :ok = Kernel.apply(module, :write_hists, [id, clock, writer, hists])
-            :ok = Kernel.apply(module, :write_scalars, [id, clock, writer, scalars])
+        writers =
+          Enum.zip(writer_configs, writers)
+          |> Enum.map(fn {{module, _}, writer} ->
+            writer = Kernel.apply(module, :write_hists, [id, clock, writer, hists])
+            writer = Kernel.apply(module, :write_scalars, [id, clock, writer, scalars])
 
-            :ok =
+            writer =
               Kernel.apply(module, :write_utilizations, [
                 id,
                 clock,
@@ -307,13 +314,12 @@ defmodule Stressgrid.Coordinator.Reporter do
                 conn_utilizations |> Map.to_list()
               ])
 
-            :ok =
-              Kernel.apply(module, :write_active_counts, [
-                id,
-                clock,
-                writer,
-                conn_active_counts |> Map.to_list()
-              ])
+            Kernel.apply(module, :write_active_counts, [
+              id,
+              clock,
+              writer,
+              conn_active_counts |> Map.to_list()
+            ])
           end)
 
         hists
@@ -321,7 +327,7 @@ defmodule Stressgrid.Coordinator.Reporter do
           :ok = :hdr_histogram.reset(hist)
         end)
 
-        {id, %{run | clock: clock + 1, prev_counters: counters, hists: hists}}
+        {id, %{run | clock: clock + 1, prev_counters: counters, hists: hists, writers: writers}}
       end)
       |> Map.new()
 
@@ -355,14 +361,6 @@ defmodule Stressgrid.Coordinator.Reporter do
       |> ManagementConnection.notify_many()
 
     {:noreply, reporter}
-  end
-
-  defp writer_module(module) when is_atom(module) do
-    module
-  end
-
-  defp writer_module(%{__struct__: module}) do
-    module
   end
 
   defp max_utilization(nil, _) do

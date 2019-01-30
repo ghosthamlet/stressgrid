@@ -13,50 +13,59 @@ defmodule Stressgrid.Coordinator.CloudWatchReportWriter do
     %CloudWatchReportWriter{region: region}
   end
 
-  def write_hists(id, _, %CloudWatchReportWriter{region: region}, hists) do
-    put_metric_data(
-      region,
-      hists
-      |> Enum.reduce([], fn {key, hist}, acc ->
-        if :hdr_histogram.get_total_count(hist) != 0 do
-          count = :hdr_histogram.get_total_count(hist)
-          sum = :hdr_histogram.mean(hist) * count
-          max = :hdr_histogram.max(hist)
-          min = :hdr_histogram.min(hist)
-          [{:statistic, key, key_unit(key), count, sum, max, min, [run: id]} | acc]
-        else
-          acc
-        end
-      end)
-    )
+  def write_hists(id, _, %CloudWatchReportWriter{region: region} = writer, hists) do
+    :ok =
+      put_metric_data(
+        region,
+        hists
+        |> Enum.reduce([], fn {key, hist}, acc ->
+          if :hdr_histogram.get_total_count(hist) != 0 do
+            count = :hdr_histogram.get_total_count(hist)
+            sum = :hdr_histogram.mean(hist) * count
+            max = :hdr_histogram.max(hist)
+            min = :hdr_histogram.min(hist)
+            [{:statistic, key, key_unit(key), count, sum, max, min, [run: id]} | acc]
+          else
+            acc
+          end
+        end)
+      )
+
+    writer
   end
 
-  def write_scalars(id, _, %CloudWatchReportWriter{region: region}, scalars) do
-    put_metric_data(
-      region,
-      scalars
-      |> Enum.map(fn {key, value} ->
-        {:scalar, key, key_unit(key), value, [run: id]}
-      end)
-    )
+  def write_scalars(id, _, %CloudWatchReportWriter{region: region} = writer, scalars) do
+    :ok =
+      put_metric_data(
+        region,
+        scalars
+        |> Enum.map(fn {key, value} ->
+          {:scalar, key, key_unit(key), value, [run: id]}
+        end)
+      )
+
+    writer
   end
 
-  def write_utilizations(_, _, _, _) do
-    :ok
+  def write_utilizations(_, _, writer, _) do
+    writer
   end
 
-  def write_active_counts(id, _, %CloudWatchReportWriter{region: region}, active_counts) do
+  def write_active_counts(id, _, %CloudWatchReportWriter{region: region} = writer, active_counts) do
     total_active_count =
       active_counts
       |> Enum.map(fn {_, active_count} -> active_count end)
       |> Enum.sum()
 
-    put_metric_data(
-      region,
-      [
-        {:scalar, :total_active_count, :count, total_active_count, [run: id]}
-      ]
-    )
+    :ok =
+      put_metric_data(
+        region,
+        [
+          {:scalar, :total_active_count, :count, total_active_count, [run: id]}
+        ]
+      )
+
+    writer
   end
 
   def finish(result_info, id, %CloudWatchReportWriter{region: region}) do
