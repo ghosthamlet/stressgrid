@@ -13,6 +13,7 @@ defmodule Stressgrid.Coordinator.Scheduler do
   }
 
   @notify_interval 1_000
+  @cooldown_ms 60_000
 
   defmodule Run do
     defstruct name: nil,
@@ -50,7 +51,8 @@ defmodule Stressgrid.Coordinator.Scheduler do
   end
 
   def init(_args) do
-    {:ok, _} = :timer.send_interval(@notify_interval, :notify)
+    Process.send_after(self(), :notify, @notify_interval)
+
     {:ok, %Scheduler{}}
   end
 
@@ -65,6 +67,8 @@ defmodule Stressgrid.Coordinator.Scheduler do
   end
 
   def handle_info(:notify, %Scheduler{runs: runs} = scheduler) do
+    Process.send_after(self(), :notify, @notify_interval)
+
     runs =
       runs
       |> Enum.map(fn {id, %Run{remaining_ms: remaining_ms} = run} ->
@@ -151,7 +155,11 @@ defmodule Stressgrid.Coordinator.Scheduler do
 
     timer_refs = [schedule_status(ts, id, :sustain, sustain_ms) | timer_refs]
     ts = ts + sustain_ms
-    timer_refs = [schedule_status(ts, id, :rampdown, ramp_steps * rampdown_step_ms) | timer_refs]
+
+    timer_refs = [
+      schedule_status(ts, id, :rampdown, ramp_steps * rampdown_step_ms + @cooldown_ms)
+      | timer_refs
+    ]
 
     {ts, timer_refs} =
       ramp_steps..1
@@ -160,7 +168,7 @@ defmodule Stressgrid.Coordinator.Scheduler do
          [schedule_op(ts, id, {:stop_cohort, "#{id}-#{i - 1}"}) | timer_refs]}
       end)
 
-    timer_refs = [schedule_op(ts, id, :stop) | timer_refs]
+    timer_refs = [schedule_op(ts + @cooldown_ms, id, :stop) | timer_refs]
 
     %Run{name: name, timer_refs: timer_refs}
   end
