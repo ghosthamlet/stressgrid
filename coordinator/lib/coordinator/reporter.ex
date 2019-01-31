@@ -91,8 +91,8 @@ defmodule Stressgrid.Coordinator.Reporter do
   end
 
   def init(args) do
-    {:ok, _} = :timer.send_interval(@report_interval, :report)
-    {:ok, _} = :timer.send_interval(@notify_interval, :notify)
+    Process.send_after(self(), :notify, @notify_interval)
+
     {:ok, %Reporter{writer_configs: args |> Keyword.get(:writer_configs, [])}}
   end
 
@@ -192,6 +192,8 @@ defmodule Stressgrid.Coordinator.Reporter do
         Kernel.apply(module, :init, params)
       end)
 
+    send(self(), {:report, id})
+
     {:noreply, %{reporter | runs: runs |> Map.put(id, %Run{name: name, writers: writers})}}
   end
 
@@ -266,7 +268,7 @@ defmodule Stressgrid.Coordinator.Reporter do
   end
 
   def handle_info(
-        :report,
+        {:report, id},
         %Reporter{
           writer_configs: writer_configs,
           conn_utilizations: conn_utilizations,
@@ -274,16 +276,16 @@ defmodule Stressgrid.Coordinator.Reporter do
           runs: runs
         } = reporter
       ) do
-    runs =
-      runs
-      |> Enum.map(fn {id,
-                      %Run{
-                        clock: clock,
-                        counters: counters,
-                        prev_counters: prev_counters,
-                        hists: hists,
-                        writers: writers
-                      } = run} ->
+    case runs |> Map.get(id) do
+      %Run{
+        clock: clock,
+        counters: counters,
+        prev_counters: prev_counters,
+        hists: hists,
+        writers: writers
+      } = run ->
+        Process.send_after(self(), {:report, id}, @report_interval)
+
         rates =
           prev_counters
           |> Enum.map(fn {key, prev_value} ->
@@ -327,11 +329,13 @@ defmodule Stressgrid.Coordinator.Reporter do
           :ok = :hdr_histogram.reset(hist)
         end)
 
-        {id, %{run | clock: clock + 1, prev_counters: counters, hists: hists, writers: writers}}
-      end)
-      |> Map.new()
+        run = %{run | clock: clock + 1, prev_counters: counters, hists: hists, writers: writers}
 
-    {:noreply, %{reporter | runs: runs}}
+        {:noreply, %{reporter | runs: runs |> Map.put(id, run)}}
+
+      nil ->
+        {:noreply, %{reporter | runs: runs}}
+    end
   end
 
   def handle_info(
@@ -341,6 +345,8 @@ defmodule Stressgrid.Coordinator.Reporter do
           conn_active_counts: conn_active_counts
         } = reporter
       ) do
+    Process.send_after(self(), :notify, @notify_interval)
+
     :ok =
       conn_utilizations
       |> Enum.map(fn {id, %{cpu: cpu, network_rx: network_rx, network_tx: network_tx}} ->
