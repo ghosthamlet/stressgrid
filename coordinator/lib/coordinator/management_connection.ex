@@ -104,10 +104,17 @@ defmodule Stressgrid.Coordinator.ManagementConnection do
          }
        )
        when is_binary(name) and is_list(blocks_json) and is_list(addresses_json) do
-    id =
+    safe_name =
+      name
+      |> String.replace(~r/[^a-zA-Z0-9]+/, "-")
+      |> String.trim("-")
+
+    now =
       DateTime.utc_now()
       |> DateTime.to_iso8601(:basic)
       |> String.replace(~r/[TZ\.]/, "")
+
+    id = "#{safe_name}-#{now}"
 
     opts =
       opts_json
