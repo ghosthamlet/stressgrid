@@ -38,7 +38,7 @@ defmodule Stressgrid.Generator.Connection do
         }
       )
 
-    {:ok, timeout_ref} = :timer.send_after(@conn_timeout, :timeout)
+    timeout_ref = Process.send_after(self(), :timeout, @conn_timeout)
 
     Logger.info("Connecting to coordinator at #{host}:#{port}...")
 
@@ -89,8 +89,8 @@ defmodule Stressgrid.Generator.Connection do
 
     Logger.info("Connected")
 
-    {:ok, :cancel} = :timer.cancel(timeout_ref)
-    {:ok, _} = :timer.send_interval(@report_interval, :report)
+    Process.cancel_timer(timeout_ref)
+    Process.send_after(self(), :report, @report_interval)
 
     {:noreply, %{connection | timeout_ref: nil}}
   end
@@ -130,6 +130,8 @@ defmodule Stressgrid.Generator.Connection do
   end
 
   def handle_info(:report, %Connection{} = connection) do
+    Process.send_after(self(), :report, @report_interval)
+
     {hists, counters, active_count} =
       Supervisor.which_children(Cohort.Supervisor)
       |> Enum.reduce({%{}, %{}, 0}, fn {_, cohort_pid, _, _}, a ->
