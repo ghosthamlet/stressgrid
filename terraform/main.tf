@@ -25,6 +25,11 @@ variable "coordinator_instance_type" {
   default = "t2.micro"
 }
 
+variable "ami_owner" {
+  type    = "string"
+  default = "198789150561"
+}
+
 provider "aws" {
   region = "${var.region}"
 }
@@ -32,13 +37,13 @@ provider "aws" {
 data "aws_ami" "coordinator" {
   most_recent = true
   name_regex  = "^stressgrid-coordinator-.*"
-  owners      = ["198789150561"]
+  owners      = ["${var.ami_owner}"]
 }
 
 data "aws_ami" "generator" {
   most_recent = true
   name_regex  = "^stressgrid-generator-.*"
-  owners      = ["198789150561"]
+  owners      = ["${var.ami_owner}"]
 }
 
 data "template_file" "coordinator_init" {
