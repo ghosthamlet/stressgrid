@@ -17,9 +17,32 @@ The coordinator is also responsible for metrics aggregation and reporting. It su
 
 Each generator is responsible for collecting the metrics of its own utilization, with two key metrics being collected. First is the number of connections that are currently running a script (active connections). Second is a floating point number between 0 and 1 that represents current utilization. It is very important to keep generator utilization at the healthy level (<0.8) to avoid generators becoming a bottleneck and negating the validity of a test.
 
+# Running with Terraform
+
+If you are using AWS, the easiest way to start using Stressgrid is by deploying it into your target VPC with [Terraform](https://www.terraform.io/). The prerequisites are the Terraform itself and `curl`. By default the Terrafomr script will use coordinator and generator public AMIs prepared for you by Stressgrid team based on the latest release:
+
+    $ cd terraform
+    $ terraform init
+    $ terraform apply
+
+The apply command will ask you for the following required Terraform variables:
+
+- `key_name`: name of SSH key pair to use with coordinator and generator instances;
+- `region`: AWS region where target VPC is located;
+- `vpc_id`: the ID for target VPC.
+
+In addition you can specify the following optional variables:
+
+- `capacity`: the desired number of generators, defaults to 2;
+- `generator_instance_type`: the generator instance type, defaults to c5.2xlarge;
+- `coordinator_instance_type`: the coordinator instance type, defaults to t2.micro;
+- `ami_owner`: owner's AWS account ID to use when looking for AMIs, defaults to 198789150561, which is the offical Stressgrid account.
+
+Once Stressgrid resources are created you can explicitly add `stressgrid-generator` security group to the target instance(s) security group. Also the apply command will output the URL of Stressgrid management website. Note that by default, this site is available only to your public IP address. You may change this by adjusting `stressgrid-coordinator` security group.
+
 # Building releases
 
-Following are the prerequisites for building Stressgrid generator and coordinator releases:
+If you are not using Terraform with Stressgrid's AMIs you may want to build coordinator and generator releases yourself. Following are the prerequisites for building Stressgrid releases:
 
 - Elixir 1.7
 - GNU C compiler (for HDR histograms)
@@ -28,7 +51,7 @@ Following are the prerequisites for building Stressgrid generator and coordinato
 To build the coordinator:
 
     $ cd coordinator/management/
-    $ npm install && npm run build
+    $ npm install && npm run build-css && npm run build
     $ cd ..
     $ MIX_ENV=prod mix deps.get
     $ MIX_ENV=prod mix release
@@ -46,13 +69,13 @@ To start the coordinator in the background, run:
 
     $ _build/prod/rel/coordinator/bin/coordinator start
 
-When started, it opens port 8000 for the management website, and port 9696 for generators to connect. If you are running in AWS, you need to make sure that security groups are set up to the following:
+When started, it opens port 8000 for the management website, and port 9696 for generators to connect. If you are running in AWS and not using our Terraform script, you need to make sure that security groups are set up to the following:
 
 - your browser is enabled to connect to port 8000 of the coordinator;
 - generators are enabled to connect to port 9696 of the coordinator;
 - generators are enabled to connect to your target instances.
 
-To enable CloudWatch report writer you need to set CW_REGION to the environment to specify in which region you would like metrics to be written. You will also need AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables, or your EC2 instance should have an IAM role associated with it. The only required permission is `cloudwatch:PutMetricData`.
+To enable CloudWatch report writer you need to set `CW_REGION` to the environment to specify in which region you would like metrics to be written. You will also need `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables, or your EC2 instance should have an IAM role associated with it. The only required permission is `cloudwatch:PutMetricData`. If you are using our Terraform script, it will set coordinator EC2 role with that permission.
 
 # Running the generator(s)
 
@@ -60,11 +83,11 @@ For realistic workloads, you will need multiple generators, each running on a de
 
     $ _build/prod/rel/generator/bin/generator start
 
-The environment variable COORDINATOR_URL is required to specify the coordinator WebSocket URL, e.g. ws://10.0.0.100:9696. Note that you may need to adjust Linux kernel settings for optimal generator performance.
+You may use `COORDINATOR_URL` environment variable to specify the coordinator WebSocket URL (defaults to `ws://localhost:9696`). Also you may use `GENERATOR_ID` to override default based on hostname. Note that you may need to adjust Linux kernel settings for optimal generator performance. If you are using our packer script, it will do this for you.
 
 # Creating EC2 AMIs for generator and coordinator
 
-To simplify running Stressgrid in EC2, we added [packer](https://www.packer.io/) scripts to create prebaked machine images.
+You can create your own AMIs by using [packer](https://www.packer.io/) scripts.
 
 By default, Stressgrid images are based on Ubuntu 18.04, so you will need the same OS to build the binary releases before running packer scripts, because it simply copies the release. The packer script also includes the necessary Linux kernel settings and the Systemd service. See packer documentation for [necessary AWS permissions](https://www.packer.io/docs/builders/amazon.html#iam-task-or-instance-role).
 
@@ -78,7 +101,9 @@ To create an AMI for the generator:
     $ cd generator
     $ ./packer.sh
 
-When launching coordinator and generator instances, you will need to pass the corresponding configuration using [EC2 user data](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html).
+# Launching EC2 instances for generator and coordinator
+
+When launching coordinator and generator instances, you will need to pass the corresponding configuration using [EC2 user data](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html). If you are using our Terraform script, it will set this up for you. 
 
 Example for the coordinator:
 
@@ -91,5 +116,3 @@ Example for the generator:
     #!/bin/bash
     echo "COORDINATOR_URL=ws://ip-172-31-22-7.us-west-1.compute.internal:9696" > /etc/default/stressgrid-generator.env
     service stressgrid-generator restart
-
-For generators, you may use the EC2 autoscale group to launch and manage the entire fleet.
