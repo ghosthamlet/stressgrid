@@ -19,15 +19,15 @@ Each generator is responsible for collecting the metrics of its own utilization,
 
 # Running with Terraform
 
-If you are using AWS, the easiest way to start using Stressgrid is by deploying it into your target VPC with [Terraform](https://www.terraform.io/). The prerequisites are the Terraform itself and `curl`. By default the Terrafomr script will use coordinator and generator public AMIs prepared for you by Stressgrid team based on the latest release:
+If you are using AWS, the easiest way to start using Stressgrid is by deploying it into your target VPC with [Terraform](https://www.terraform.io/). The prerequisites are the Terraform itself and curl. By default the Terrafomr script will use coordinator and generator public AMIs prepared for you by the Stressgrid team based on the latest release:
 
     $ cd terraform
     $ terraform init
     $ terraform apply
 
-The apply command will ask you for the following required Terraform variables:
+The [apply](https://www.terraform.io/docs/commands/apply.html) command will ask you for the following required Terraform variables:
 
-- `key_name`: name of SSH key pair to use with coordinator and generator instances;
+- `key_name`: name of the SSH key pair to use with coordinator and generator instances;
 - `region`: AWS region where target VPC is located;
 - `vpc_id`: the ID for target VPC.
 
@@ -38,11 +38,11 @@ In addition you can specify the following optional variables:
 - `coordinator_instance_type`: the coordinator instance type, defaults to t2.micro;
 - `ami_owner`: owner's AWS account ID to use when looking for AMIs, defaults to 198789150561, which is the offical Stressgrid account.
 
-Once Stressgrid resources are created you can explicitly add `stressgrid-generator` security group to the target instance(s) security group. Also the apply command will output the URL of Stressgrid management website. Note that by default, this site is available only to your public IP address. You may change this by adjusting `stressgrid-coordinator` security group.
+Once Stressgrid resources are created you can explicitly add `stressgrid-generator` security group to the target instance(s) security group for the ports you will be testing. Also the apply command will output the URL of Stressgrid management website as `coordinator_url`. Note that by default, this website is available only to your public IP address. You may change this by adjusting `stressgrid-coordinator` security group.
 
 # Building releases
 
-If you are not using Terraform with Stressgrid's AMIs you may want to build coordinator and generator releases yourself. Following are the prerequisites for building Stressgrid releases:
+If you are not running in AWS or willing to use Stressgrid's AMIs you may want to build coordinator and generator releases yourself. Following are the prerequisites for building Stressgrid releases:
 
 - Elixir 1.7
 - GNU C compiler (for HDR histograms)
@@ -75,7 +75,7 @@ When started, it opens port 8000 for the management website, and port 9696 for g
 - generators are enabled to connect to port 9696 of the coordinator;
 - generators are enabled to connect to your target instances.
 
-To enable CloudWatch report writer you need to set `CW_REGION` to the environment to specify in which region you would like metrics to be written. You will also need `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables, or your EC2 instance should have an IAM role associated with it. The only required permission is `cloudwatch:PutMetricData`. If you are using our Terraform script, it will set coordinator EC2 role with that permission.
+To enable CloudWatch report writer you need to set `CW_REGION` to the environment to specify in which region you would like metrics to be written. You will also need `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables, or your EC2 instance should have an IAM role associated with it. The only required permission is `cloudwatch:PutMetricData`. If you are using our Terraform script, it will set the coordinator EC2 role with that permission.
 
 # Running the generator(s)
 
