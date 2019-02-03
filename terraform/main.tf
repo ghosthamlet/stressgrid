@@ -34,6 +34,10 @@ provider "aws" {
   region = "${var.region}"
 }
 
+data "external" "my_ip" {
+  program = ["curl", "https://api.ipify.org?format=json"]
+}
+
 data "aws_ami" "coordinator" {
   most_recent = true
   name_regex  = "^stressgrid-coordinator-.*"
@@ -74,7 +78,7 @@ resource "aws_security_group" "coordinator" {
     from_port   = 8000
     to_port     = 8000
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = ["${data.external.my_ip.result.ip}/32"]
   }
 
   ingress {
