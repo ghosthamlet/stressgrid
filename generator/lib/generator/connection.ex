@@ -343,7 +343,7 @@ defmodule Stressgrid.Generator.Connection do
          %{connection | net_bytes_rx: bytes_rx1, net_bytes_tx: bytes_tx1}}
 
       _ ->
-        {:ok, 0, %{connection | net_bytes_rx: nil, net_bytes_tx: nil}}
+        {:ok, 0, 0, %{connection | net_bytes_rx: nil, net_bytes_tx: nil}}
     end
   end
 end
