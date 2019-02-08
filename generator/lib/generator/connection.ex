@@ -17,8 +17,6 @@ defmodule Stressgrid.Generator.Connection do
             net_bytes_tx: nil,
             timeout_ref: nil,
             stream_ref: nil,
-            hists: %{},
-            counters: %{},
             cohorts: %{}
 
   def start_link(args) do
