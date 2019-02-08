@@ -272,6 +272,7 @@ defmodule Stressgrid.Generator.Connection do
         end
 
       error ->
+        Logger.error("Error reading /proc/net/dev: #{inspect(error)}")
         error
     end
   end
@@ -297,6 +298,7 @@ defmodule Stressgrid.Generator.Connection do
         end
 
       error ->
+        Logger.error("Error reading /proc/stat: #{inspect(error)}")
         error
     end
   end
