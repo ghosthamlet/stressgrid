@@ -11,8 +11,7 @@ defmodule Stressgrid.Generator.Connection do
 
   defstruct id: nil,
             conn_pid: nil,
-            cpu_busy: nil,
-            cpu_idle: nil,
+            wall_times: nil,
             net_bytes_rx: nil,
             net_bytes_tx: nil,
             timeout_ref: nil,
@@ -24,6 +23,8 @@ defmodule Stressgrid.Generator.Connection do
   end
 
   def init(args) do
+    :erlang.system_flag(:scheduler_wall_time, true)
+
     host = args |> Keyword.fetch!(:host)
     port = args |> Keyword.fetch!(:port)
 
@@ -277,51 +278,26 @@ defmodule Stressgrid.Generator.Connection do
     end
   end
 
-  defp read_stat do
-    case File.read("/proc/stat") do
-      {:ok, r} ->
-        case r |> String.split("\n", trim: true) do
-          [line0 | _] ->
-            case line0 |> String.split(" ", trim: true) do
-              ["cpu" | [user | [nice | [system | [idle | _]]]]] ->
-                busy =
-                  String.to_integer(user) + String.to_integer(nice) + String.to_integer(system)
+  defp cpu_utilization(%Connection{wall_times: prev_wall_times} = connection) do
+    next_wall_times =
+      :erlang.statistics(:scheduler_wall_time)
+      |> Enum.sort()
+      |> Enum.take(:erlang.system_info(:schedulers))
 
-                {:ok, busy, String.to_integer(idle)}
+    utilization =
+      if prev_wall_times != nil do
+        {da, dt} =
+          Enum.zip(prev_wall_times, next_wall_times)
+          |> Enum.reduce({0, 0}, fn {{_, a0, t0}, {_, a1, t1}}, {da, dt} ->
+            {da + (a1 - a0), dt + (t1 - t0)}
+          end)
 
-              _ ->
-                :error
-            end
+        da / dt
+      else
+        0
+      end
 
-          _ ->
-            :error
-        end
-
-      error ->
-        Logger.error("Error reading /proc/stat: #{inspect(error)}")
-        error
-    end
-  end
-
-  defp cpu_utilization(%Connection{cpu_busy: nil, cpu_idle: nil} = connection) do
-    case read_stat() do
-      {:ok, busy, idle} ->
-        {:ok, 0, %{connection | cpu_busy: busy, cpu_idle: idle}}
-
-      _ ->
-        {:ok, 0, connection}
-    end
-  end
-
-  defp cpu_utilization(%Connection{cpu_busy: busy0, cpu_idle: idle0} = connection) do
-    case read_stat() do
-      {:ok, busy1, idle1} ->
-        {:ok, (busy1 - busy0) / (busy1 + idle1 - (busy0 + idle0)),
-         %{connection | cpu_busy: busy1, cpu_idle: idle1}}
-
-      _ ->
-        {:ok, 0, %{connection | cpu_busy: nil, cpu_idle: nil}}
-    end
+    {:ok, utilization, %{connection | wall_times: next_wall_times}}
   end
 
   defp network_utilization(%Connection{net_bytes_rx: nil, net_bytes_tx: nil} = connection) do
