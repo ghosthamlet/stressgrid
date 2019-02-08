@@ -2,5 +2,4 @@
 -setcookie <%=release.profile.cookie%>
 +P 16777216
 +Q 16777216
-+K true
 +A 64
