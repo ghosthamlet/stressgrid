@@ -12,12 +12,12 @@ variable "key_name" {
 
 variable "capacity" {
   type    = "string"
-  default = "2"
+  default = "1"
 }
 
 variable "generator_instance_type" {
   type    = "string"
-  default = "c5.2xlarge"
+  default = "c5.xlarge"
 }
 
 variable "coordinator_instance_type" {
