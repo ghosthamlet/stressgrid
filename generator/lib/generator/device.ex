@@ -97,12 +97,18 @@ defmodule Stressgrid.Generator.Device do
       ) do
     Logger.debug("Starting request #{method} #{path}")
 
-    ts = :os.system_time(:micro_seconds)
+    case prepare_request(headers, body) do
+      {:ok, headers, body} ->
+        ts = :os.system_time(:micro_seconds)
 
-    stream_ref = :gun.request(conn_pid, method, path, headers, body)
+        stream_ref = :gun.request(conn_pid, method, path, headers, body)
 
-    device = %{device | stream_ref: stream_ref, request_from: request_from, last_ts: ts}
-    {:noreply, device}
+        device = %{device | stream_ref: stream_ref, request_from: request_from, last_ts: ts}
+        {:noreply, device}
+
+      error ->
+        {:reply, error, device}
+    end
   end
 
   def handle_info(
@@ -516,5 +522,28 @@ defmodule Stressgrid.Generator.Device do
 
   defp reason_to_key(_) do
     :unknown_error_count
+  end
+
+  def prepare_request(headers, body) when is_binary(body) do
+    {:ok, headers, body}
+  end
+
+  def prepare_request(headers, body) do
+    case Jason.encode(body) do
+      {:ok, encoded_body} ->
+        encoded_headers =
+          headers
+          |> Enum.reject(fn
+            {"content-type", _} -> true
+            {"Content-Type", _} -> true
+            _ -> false
+          end)
+          |> Enum.concat([{"content-type", "application/json; charset=utf-8"}])
+
+        {:ok, encoded_headers, encoded_body}
+
+      error ->
+        error
+    end
   end
 end
