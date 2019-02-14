@@ -373,14 +373,14 @@ defmodule Stressgrid.Generator.Device do
     if request_from != nil do
       response_iodata = response_iodata |> Enum.reverse()
 
-      response_data =
+      response_body =
         case response_headers |> List.keyfind("content-type", 0) do
           {_, content_type} ->
             case :cow_http_hd.parse_content_type(content_type) do
               {"application", "json", _} ->
                 case Jason.decode(response_iodata) do
                   {:ok, json} ->
-                    json
+                    {:json, json}
 
                   _ ->
                     response_iodata
@@ -396,7 +396,7 @@ defmodule Stressgrid.Generator.Device do
 
       GenServer.reply(
         request_from,
-        {response_status, response_headers, response_data}
+        {response_status, response_headers, response_body}
       )
     end
 
@@ -528,10 +528,10 @@ defmodule Stressgrid.Generator.Device do
     {:ok, headers, body}
   end
 
-  def prepare_request(headers, body) do
-    case Jason.encode(body) do
-      {:ok, encoded_body} ->
-        encoded_headers =
+  def prepare_request(headers, {:json, json}) do
+    case Jason.encode(json) do
+      {:ok, body} ->
+        headers =
           headers
           |> Enum.reject(fn
             {"content-type", _} -> true
@@ -540,7 +540,7 @@ defmodule Stressgrid.Generator.Device do
           end)
           |> Enum.concat([{"content-type", "application/json; charset=utf-8"}])
 
-        {:ok, encoded_headers, encoded_body}
+        {:ok, headers, body}
 
       error ->
         error
