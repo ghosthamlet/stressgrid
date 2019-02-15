@@ -15,6 +15,25 @@ const defaultScript = `0..100 |> Enum.each(fn _ ->
   delay(900, 0.1)
 end)`;
 
+const defaultJson = JSON.stringify({
+  addresses: [{
+    host: 'localhost',
+    port: 5000
+  }],
+  blocks: [{
+    params: {},
+    script: defaultScript,
+    size: 10000
+  }],
+  name: '10k',
+  opts: {
+    ramp_steps: 1000,
+    rampdown_step_ms: 900,
+    rampup_step_ms: 900,
+    sustain_ms: 900000
+  }
+}, null, 2);
+
 interface IAppProps {
   generatorsStore?: GeneratorsStore;
   runsStore?: RunsStore;
@@ -24,6 +43,7 @@ interface IAppProps {
 
 interface IAppState {
   error?: string;
+  advanced: boolean;
 }
 
 @inject('generatorsStore')
@@ -32,6 +52,8 @@ interface IAppState {
 @inject('ws')
 @observer
 class App extends React.Component<IAppProps, IAppState> {
+  private jsonTextRef: React.RefObject<HTMLTextAreaElement> = React.createRef();
+
   private nameInputRef: React.RefObject<HTMLInputElement> = React.createRef();
   private desiredSizeInputRef: React.RefObject<HTMLInputElement> = React.createRef();
 
@@ -47,7 +69,7 @@ class App extends React.Component<IAppProps, IAppState> {
 
   constructor(props: IAppProps) {
     super(props);
-    this.state = {};
+    this.state = { advanced: false };
   }
 
   public render() {
@@ -61,72 +83,84 @@ class App extends React.Component<IAppProps, IAppState> {
           <div className="col-4 p-4">
             <h3>Plan</h3>
             <form className="bg-light rounded p-4">
+              <div className="form-group form-check">
+                <input type="checkbox" className="form-check-input" id="advanced" checked={this.state.advanced} onChange={this.changeAdvanced} />
+                <label className="form-check-label" htmlFor="advanced">Advanced Mode</label>
+              </div>
               {this.state.error && <div className="alert alert-danger" role="alert">
                 {this.state.error}
               </div>}
               <fieldset>
-                <div className="form-group">
-                  <label htmlFor="name">Plan name</label>
-                  <input className="form-control" id="name" type="text" ref={this.nameInputRef} defaultValue="10K" />
-                </div>
-                <div className="row">
-                  <div className="col">
-                    <div className="form-group">
-                      <label htmlFor="desizedSize">Desired number of devices</label>
-                      <input className="form-control" id="desizedSize" type="text" ref={this.desiredSizeInputRef} onChange={this.updateDesiredSize} defaultValue="10000" />
+                {this.state.advanced && <span>
+                  <div className="form-group">
+                    <label htmlFor="json">JSON</label>
+                    <textarea className="form-control" id="json" rows={32} ref={this.jsonTextRef} defaultValue={defaultJson} />
+                  </div>
+                </span>}
+                {!this.state.advanced && <span>
+                  <div className="form-group">
+                    <label htmlFor="name">Plan name</label>
+                    <input className="form-control" id="name" type="text" ref={this.nameInputRef} defaultValue="10K" />
+                  </div>
+                  <div className="row">
+                    <div className="col">
+                      <div className="form-group">
+                        <label htmlFor="desizedSize">Desired number of devices</label>
+                        <input className="form-control" id="desizedSize" type="text" ref={this.desiredSizeInputRef} onChange={this.updateDesiredSize} defaultValue="10000" />
+                      </div>
+                    </div>
+                    <div className="col">
+                      <div className="form-group">
+                        <label htmlFor="size">Effective number of devices</label>
+                        <input className="form-control" id="size" type="text" value={_.defaultTo(generatorsStore ? generatorsStore.size : NaN, 0)} readOnly={true} />
+                        <small id="passwordHelpBlock" className="form-text text-muted">Multiples of ramp step size: {generatorsStore ? generatorsStore.rampStepSize : NaN}</small>
+                      </div>
                     </div>
                   </div>
-                  <div className="col">
-                    <div className="form-group">
-                      <label htmlFor="size">Effective number of devices</label>
-                      <input className="form-control" id="size" type="text" value={_.defaultTo(generatorsStore ? generatorsStore.size : NaN, 0)} readOnly={true} />
-                      <small id="passwordHelpBlock" className="form-text text-muted">Multiples of ramp step size: {generatorsStore ? generatorsStore.rampStepSize : NaN}</small>
+                  <div className="form-group">
+                    <label htmlFor="script">Script</label>
+                    <textarea className="form-control" id="script" rows={8} ref={this.scriptTextRef} defaultValue={defaultScript} />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="params">Params</label>
+                    <textarea className="form-control" id="params" rows={1} ref={this.paramsTextRef} defaultValue='{ }' />
+                  </div>
+                  <div className="row">
+                    <div className="col">
+                      <div className="form-group">
+                        <label htmlFor="host">Target host(s)</label>
+                        <input className="form-control" id="host" type="text" ref={this.hostInputRef} defaultValue="localhost" />
+                        <small id="passwordHelpBlock" className="form-text text-muted">Comma separated</small>
+                      </div>
+                    </div>
+                    <div className="col">
+                      <div className="form-group">
+                        <label htmlFor="port">Target port</label>
+                        <input className="form-control" id="port" type="text" ref={this.portInputRef} defaultValue="5000" />
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="form-group">
-                  <label htmlFor="script">Script</label>
-                  <textarea className="form-control" id="script" rows={8} ref={this.scriptTextRef} defaultValue={defaultScript} />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="params">Params</label>
-                  <textarea className="form-control" id="params" rows={1} ref={this.paramsTextRef} defaultValue='{ }' />
-                </div>
-                <div className="row">
-                  <div className="col">
-                    <div className="form-group">
-                      <label htmlFor="host">Target host(s)</label>
-                      <input className="form-control" id="host" type="text" ref={this.hostInputRef} defaultValue="localhost" />
-                      <small id="passwordHelpBlock" className="form-text text-muted">Comma separated</small>
+                  <div className="row">
+                    <div className="col">
+                      <div className="form-group">
+                        <label htmlFor="rampupSecs">Rampup (seconds)</label>
+                        <input className="form-control" id="rampupSecs" type="text" ref={this.rampupSecsInputRef} defaultValue="900" />
+                      </div>
+                    </div>
+                    <div className="col">
+                      <div className="form-group">
+                        <label htmlFor="sustainSecs">Sustain (seconds)</label>
+                        <input className="form-control" id="sustainSecs" type="text" ref={this.sustainSecsInputRef} defaultValue="900" />
+                      </div>
+                    </div>
+                    <div className="col">
+                      <div className="form-group">
+                        <label htmlFor="rampdownSecs">Rampdown (seconds)</label>
+                        <input className="form-control" id="rampdownSecs" type="text" ref={this.rampdownSecsInputRef} defaultValue="900" />
+                      </div>
                     </div>
                   </div>
-                  <div className="col">
-                    <div className="form-group">
-                      <label htmlFor="port">Target port</label>
-                      <input className="form-control" id="port" type="text" ref={this.portInputRef} defaultValue="5000" />
-                    </div>
-                  </div>
-                </div>
-                <div className="row">
-                  <div className="col">
-                    <div className="form-group">
-                      <label htmlFor="rampupSecs">Rampup (seconds)</label>
-                      <input className="form-control" id="rampupSecs" type="text" ref={this.rampupSecsInputRef} defaultValue="900" />
-                    </div>
-                  </div>
-                  <div className="col">
-                    <div className="form-group">
-                      <label htmlFor="sustainSecs">Sustain (seconds)</label>
-                      <input className="form-control" id="sustainSecs" type="text" ref={this.sustainSecsInputRef} defaultValue="900" />
-                    </div>
-                  </div>
-                  <div className="col">
-                    <div className="form-group">
-                      <label htmlFor="rampdownSecs">Rampdown (seconds)</label>
-                      <input className="form-control" id="rampdownSecs" type="text" ref={this.rampdownSecsInputRef} defaultValue="900" />
-                    </div>
-                  </div>
-                </div>
+                </span>}
                 <button className="btn btn-primary" onClick={this.runPlan}>Run</button>
               </fieldset>
             </form>
@@ -227,57 +261,77 @@ class App extends React.Component<IAppProps, IAppState> {
     }
   }
 
+  private changeAdvanced = () => {
+    this.setState({
+      advanced: !this.state.advanced
+    });
+  }
+
   private runPlan = (event: React.SyntheticEvent<HTMLButtonElement>) => {
     const { generatorsStore, ws } = this.props;
-    const nameInput = this.nameInputRef.current;
-    const scriptText = this.scriptTextRef.current;
-    const paramsText = this.paramsTextRef.current;
-    const hostInput = this.hostInputRef.current;
-    const portInput = this.portInputRef.current;
-    const rampupSecsInput = this.rampupSecsInputRef.current;
-    const sustainSecsInput = this.sustainSecsInputRef.current;
-    const rampdownSecsInput = this.rampdownSecsInputRef.current;
-
-    if (ws && generatorsStore && nameInput && hostInput && portInput && scriptText && paramsText && rampupSecsInput && sustainSecsInput && rampdownSecsInput) {
-      this.setState({ error: undefined });
-      try {
-        const name = nameInput.value;
-        const port = parseInt(portInput.value, 10);
-        const size = generatorsStore.size;
-        const rampSteps = generatorsStore.rampSteps;
-        const rampdownStepMs = (parseInt(rampdownSecsInput.value, 10) * 1000) / rampSteps;
-        const rampupStepMs = (parseInt(rampupSecsInput.value, 10) * 1000) / rampSteps;
-        const sustainMs = (parseInt(sustainSecsInput.value, 10) * 1000);
-        if (_.isEmpty(name)) { throw new Error('Name is invalid'); }
-        if (isNaN(port) || port <= 0) { throw new Error('Port is invalid'); }
-        if (isNaN(size) || size <= 0) { throw new Error('Effective size is invalid'); }
-        if (isNaN(rampSteps) || rampSteps <= 0) { throw new Error('Ramp steps is invalid'); }
-        if (isNaN(rampdownStepMs) || rampdownStepMs <= 0) { throw new Error('Rampdown duration is invalid'); }
-        if (isNaN(rampupStepMs) || rampupStepMs <= 0) { throw new Error('Ramup duration is invalid'); }
-        if (isNaN(sustainMs) || sustainMs <= 0) { throw new Error('Sustain duration is invalid'); }
-        ws.run({
-          addresses: _.map(_.split(hostInput.value, ","), host => {
-            return {
-              host: _.trim(host),
-              port
-            };
-          }),
-          blocks: [{
-            params: JSON.parse(paramsText.value),
-            script: scriptText.value,
-            size
-          }],
-          name,
-          opts: {
-            ramp_steps: rampSteps,
-            rampdown_step_ms: rampdownStepMs,
-            rampup_step_ms: rampupStepMs,
-            sustain_ms: sustainMs
-          }
-        });
+    if (this.state.advanced) {
+      const jsonText = this.jsonTextRef.current;
+      if (ws && generatorsStore && jsonText) {
+        this.setState({ error: undefined });
+        try {
+          ws.run(JSON.parse(jsonText.value));
+        }
+        catch (e) {
+          this.setState({ error: e.toString() });
+        }
       }
-      catch (e) {
-        this.setState({ error: e.toString() });
+    }
+    else {
+      const nameInput = this.nameInputRef.current;
+      const scriptText = this.scriptTextRef.current;
+      const paramsText = this.paramsTextRef.current;
+      const hostInput = this.hostInputRef.current;
+      const portInput = this.portInputRef.current;
+      const rampupSecsInput = this.rampupSecsInputRef.current;
+      const sustainSecsInput = this.sustainSecsInputRef.current;
+      const rampdownSecsInput = this.rampdownSecsInputRef.current;
+
+      if (ws && generatorsStore && nameInput && hostInput && portInput && scriptText && paramsText && rampupSecsInput && sustainSecsInput && rampdownSecsInput) {
+        this.setState({ error: undefined });
+        try {
+          const name = nameInput.value;
+          const port = parseInt(portInput.value, 10);
+          const size = generatorsStore.size;
+          const rampSteps = generatorsStore.rampSteps;
+          const rampdownStepMs = (parseInt(rampdownSecsInput.value, 10) * 1000) / rampSteps;
+          const rampupStepMs = (parseInt(rampupSecsInput.value, 10) * 1000) / rampSteps;
+          const sustainMs = (parseInt(sustainSecsInput.value, 10) * 1000);
+          if (_.isEmpty(name)) { throw new Error('Name is invalid'); }
+          if (isNaN(port) || port <= 0) { throw new Error('Port is invalid'); }
+          if (isNaN(size) || size <= 0) { throw new Error('Effective size is invalid'); }
+          if (isNaN(rampSteps) || rampSteps <= 0) { throw new Error('Ramp steps is invalid'); }
+          if (isNaN(rampdownStepMs) || rampdownStepMs <= 0) { throw new Error('Rampdown duration is invalid'); }
+          if (isNaN(rampupStepMs) || rampupStepMs <= 0) { throw new Error('Ramup duration is invalid'); }
+          if (isNaN(sustainMs) || sustainMs <= 0) { throw new Error('Sustain duration is invalid'); }
+          ws.run({
+            addresses: _.map(_.split(hostInput.value, ","), host => {
+              return {
+                host: _.trim(host),
+                port
+              };
+            }),
+            blocks: [{
+              params: JSON.parse(paramsText.value),
+              script: scriptText.value,
+              size
+            }],
+            name,
+            opts: {
+              ramp_steps: rampSteps,
+              rampdown_step_ms: rampdownStepMs,
+              rampup_step_ms: rampupStepMs,
+              sustain_ms: sustainMs
+            }
+          });
+        }
+        catch (e) {
+          this.setState({ error: e.toString() });
+        }
       }
     }
     event.preventDefault();
