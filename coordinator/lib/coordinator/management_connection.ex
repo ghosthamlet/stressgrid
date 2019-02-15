@@ -95,12 +95,13 @@ defmodule Stressgrid.Coordinator.ManagementConnection do
   defp receive_json(
          %ManagementConnection{} = connection,
          %{
-           "run_plan" => %{
-             "name" => name,
-             "blocks" => blocks_json,
-             "addresses" => addresses_json,
-             "opts" => opts_json
-           }
+           "run_plan" =>
+             %{
+               "name" => name,
+               "blocks" => blocks_json,
+               "addresses" => addresses_json,
+               "opts" => opts_json
+             } = plan
          }
        )
        when is_binary(name) and is_list(blocks_json) and is_list(addresses_json) do
@@ -115,49 +116,22 @@ defmodule Stressgrid.Coordinator.ManagementConnection do
       |> String.replace(~r/[TZ\.]/, "")
 
     id = "#{safe_name}-#{now}"
-
-    opts =
-      opts_json
-      |> Enum.reduce([], fn
-        {"ramp_steps", ramp_steps}, acc when is_integer(ramp_steps) ->
-          [{:ramp_steps, ramp_steps} | acc]
-
-        {"rampup_step_ms", ms}, acc when is_integer(ms) ->
-          [{:rampup_step_ms, ms} | acc]
-
-        {"sustain_ms", ms}, acc when is_integer(ms) ->
-          [{:sustain_ms, ms} | acc]
-
-        {"rampdown_step_ms", ms}, acc when is_integer(ms) ->
-          [{:rampdown_step_ms, ms} | acc]
-
-        _, acc ->
-          acc
-      end)
+    script = plan |> Map.get("script")
+    opts = parse_opts_json(opts_json)
 
     blocks =
       blocks_json
       |> Enum.reduce([], fn block_json, acc ->
-        case block_json
-             |> Enum.reduce([], fn
-               {"script", script}, acc when is_binary(script) ->
-                 [{:script, script} | acc]
-
-               {"params", params}, acc when is_map(params) ->
-                 [{:params, params} | acc]
-
-               {"size", size}, acc when is_integer(size) ->
-                 [{:size, size} | acc]
-
-               _, acc ->
-                 acc
-             end)
-             |> Map.new() do
+        case parse_block_json(block_json) do
           %{script: _} = block ->
             [block | acc]
 
-          _ ->
-            acc
+          block ->
+            if is_binary(script) do
+              [block |> Map.put(:script, script) | acc]
+            else
+              acc
+            end
         end
       end)
       |> Enum.reverse()
@@ -165,23 +139,7 @@ defmodule Stressgrid.Coordinator.ManagementConnection do
     addresses =
       addresses_json
       |> Enum.reduce([], fn address_json, acc ->
-        case address_json
-             |> Enum.reduce({:tcp, nil, 80}, fn
-               {"host", host}, acc when is_binary(host) ->
-                 acc |> put_elem(1, host)
-
-               {"port", port}, acc when is_integer(port) ->
-                 acc |> put_elem(2, port)
-
-               {"protocol", "http"}, acc ->
-                 acc |> put_elem(0, :tcp)
-
-               {"protocol", "https"}, acc ->
-                 acc |> put_elem(0, :tls)
-
-               _, acc ->
-                 acc
-             end) do
+        case parse_address_json(address_json) do
           {_, host, _} = address when is_binary(host) ->
             [address | acc]
 
@@ -219,5 +177,63 @@ defmodule Stressgrid.Coordinator.ManagementConnection do
        when is_binary(id) do
     :ok = Reporter.remove_report(id)
     connection
+  end
+
+  defp parse_opts_json(json) do
+    json
+    |> Enum.reduce([], fn
+      {"ramp_steps", ramp_steps}, acc when is_integer(ramp_steps) ->
+        [{:ramp_steps, ramp_steps} | acc]
+
+      {"rampup_step_ms", ms}, acc when is_integer(ms) ->
+        [{:rampup_step_ms, ms} | acc]
+
+      {"sustain_ms", ms}, acc when is_integer(ms) ->
+        [{:sustain_ms, ms} | acc]
+
+      {"rampdown_step_ms", ms}, acc when is_integer(ms) ->
+        [{:rampdown_step_ms, ms} | acc]
+
+      _, acc ->
+        acc
+    end)
+  end
+
+  defp parse_block_json(json) do
+    json
+    |> Enum.reduce([], fn
+      {"script", script}, acc when is_binary(script) ->
+        [{:script, script} | acc]
+
+      {"params", params}, acc when is_map(params) ->
+        [{:params, params} | acc]
+
+      {"size", size}, acc when is_integer(size) ->
+        [{:size, size} | acc]
+
+      _, acc ->
+        acc
+    end)
+    |> Map.new()
+  end
+
+  defp parse_address_json(json) do
+    json
+    |> Enum.reduce({:tcp, nil, 80}, fn
+      {"host", host}, acc when is_binary(host) ->
+        acc |> put_elem(1, host)
+
+      {"port", port}, acc when is_integer(port) ->
+        acc |> put_elem(2, port)
+
+      {"protocol", "http"}, acc ->
+        acc |> put_elem(0, :tcp)
+
+      {"protocol", "https"}, acc ->
+        acc |> put_elem(0, :tls)
+
+      _, acc ->
+        acc
+    end)
   end
 end

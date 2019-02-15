@@ -22,7 +22,6 @@ const defaultJson = JSON.stringify({
   }],
   blocks: [{
     params: {},
-    script: defaultScript,
     size: 10000
   }],
   name: '10k',
@@ -31,7 +30,8 @@ const defaultJson = JSON.stringify({
     rampdown_step_ms: 900,
     rampup_step_ms: 900,
     sustain_ms: 900000
-  }
+  },
+  script: defaultScript
 }, null, 2);
 
 interface IAppProps {
@@ -317,7 +317,6 @@ class App extends React.Component<IAppProps, IAppState> {
             }),
             blocks: [{
               params: JSON.parse(paramsText.value),
-              script: scriptText.value,
               size
             }],
             name,
@@ -326,7 +325,8 @@ class App extends React.Component<IAppProps, IAppState> {
               rampdown_step_ms: rampdownStepMs,
               rampup_step_ms: rampupStepMs,
               sustain_ms: sustainMs
-            }
+            },
+            script: scriptText.value
           });
         }
         catch (e) {

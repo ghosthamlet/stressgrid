@@ -51,14 +51,15 @@ interface INotify {
 }
 
 interface IBlock {
-  script: string;
-  params: object;
-  size: number;
+  script?: string;
+  params?: object;
+  size?: number;
 }
 
 interface IAddress {
   host: string;
-  port: number;
+  port?: number;
+  protocol?: string;
 }
 
 interface IOpts {
@@ -73,6 +74,7 @@ interface IRunPlan {
   blocks: IBlock[];
   addresses: IAddress[];
   opts: IOpts;
+  script?: string;
 }
 
 interface IAbortRun {
