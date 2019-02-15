@@ -41,12 +41,22 @@ The [apply](https://www.terraform.io/docs/commands/apply.html) command will ask 
 
 In addition, you can specify the following optional variables:
 
-- `capacity`: the desired number of generators, default is 2;
-- `generator_instance_type`: the generator instance type, defaults to c5.2xlarge;
+- `capacity`: the desired number of generators, default is 1;
+- `generator_instance_type`: the generator instance type, defaults to c5.xlarge;
 - `coordinator_instance_type`: the coordinator instance type, defaults to t2.micro;
 - `ami_owner`: owner's AWS account ID to use when looking for AMIs, defaults to 198789150561 (offical Stressgrid account).
 
 Once Stressgrid resources are created, you can explicitly add the `stressgrid-generator` security group to the target instance(s) security group for the ports you will be testing. Also, the apply command will output the URL of the Stressgrid management website as `coordinator_url`. Note that by default, this website is available only to your public IP address. You may want to change this by adjusting the `stressgrid-coordinator` security group.
+
+# Running tests
+
+Stressgrid management website is the place to define and run the test plans. The left pane is where the test plan is defined. There are the following settings.
+
+- Plan name describes the combination of plan settings and target system, for example, let's say we are testing photo gallery: 10k-browsing-photos-c5-2xlarge would be for simulation of 10k users browsing photos against c5.2xlarge instance.
+- The desired number of devices gets rounded down to the effective number of devices by multiples of ramp step size. Rampup and rampdown happen in discrete steps, and each generator has a fixed number of devices that are started and stopped in each step: 10. Therefore ramp step size is 10 times the number of generators. For example, if we use 100 generators, then the ramp step size will be 1000. We can run tests with the effective number of devices as multiples of 1000. 
+- The script defines the behavior we want to simulate. It is written in the Elixir programming language. In addition to standard language modules like `Enum`, there are special functions to execute HTTP requests and to delay for a specified period of time.
+- The target hosts are one or more IP addresses or hostnames to send HTTP requests. When more than one is specified the round-robin strategy is used for load balancing. The target port used for all target hosts.
+- The rampup, sustain and rampdown define the timing parameters of the workload. Rampup and rampdown intervals are divided into the number of discrete steps each one adding or removing device connections. The sustain interval is when the target number of device connections is maintained.
 
 # Building releases
 
@@ -126,4 +136,5 @@ Example for the generator:
     service stressgrid-generator restart
     
 # Getting help
+
 We’re monitoring the [Stressgrid Telegram group](https://t.me/joinchat/Lx57txRJiNi1ciJuxKFFgg) and [#stressgrid on Freenode](irc:freenode.net/channel/stressgrid), if you have any questions.
