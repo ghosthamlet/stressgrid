@@ -24,8 +24,30 @@ defmodule Stressgrid.Coordinator.CsvReportWriter do
       end)
       |> Enum.map(fn {key, hist} ->
         mean = :hdr_histogram.mean(hist)
+        min = :hdr_histogram.min(hist)
+        pc1 = :hdr_histogram.percentile(hist, 1.0)
+        pc10 = :hdr_histogram.percentile(hist, 10.0)
+        pc25 = :hdr_histogram.percentile(hist, 25.0)
+        median = :hdr_histogram.median(hist)
+        pc75 = :hdr_histogram.percentile(hist, 75.0)
+        pc90 = :hdr_histogram.percentile(hist, 90.0)
+        pc99 = :hdr_histogram.percentile(hist, 99.0)
+        max = :hdr_histogram.max(hist)
         stddev = :hdr_histogram.stddev(hist)
-        [{key, mean}, {:"#{key}_stddev", stddev}]
+
+        [
+          {key, mean},
+          {:"#{key}_min", min},
+          {:"#{key}_pc1", pc1},
+          {:"#{key}_pc10", pc10},
+          {:"#{key}_pc25", pc25},
+          {:"#{key}_median", median},
+          {:"#{key}_pc75", pc75},
+          {:"#{key}_pc90", pc90},
+          {:"#{key}_pc99", pc99},
+          {:"#{key}_max", max},
+          {:"#{key}_stddev", stddev}
+        ]
       end)
       |> Enum.concat()
       |> Map.new()
