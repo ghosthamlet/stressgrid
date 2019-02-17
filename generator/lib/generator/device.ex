@@ -245,6 +245,7 @@ defmodule Stressgrid.Generator.Device do
 
     {:noreply,
      %{device | last_ts: nil, task: task}
+     |> inc_counter("conn_count" |> String.to_atom(), 1)
      |> record_hist(:conn_us, ts - last_ts)}
   end
 
