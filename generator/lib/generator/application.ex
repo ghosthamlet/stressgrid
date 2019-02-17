@@ -1,7 +1,7 @@
 defmodule Stressgrid.Generator.Application do
   @moduledoc false
 
-  alias Stressgrid.Generator.{Connection, Cohort, Script}
+  alias Stressgrid.Generator.{Connection, Cohort}
 
   use Application
 
