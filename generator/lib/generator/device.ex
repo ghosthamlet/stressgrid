@@ -430,7 +430,11 @@ defmodule Stressgrid.Generator.Device do
     }
   end
 
-  defp recycle(%Device{conn_pid: conn_pid, conn_ref: conn_ref, task: task} = device, delay \\ 0) do
+  defp recycle(
+         %Device{conn_pid: conn_pid, conn_ref: conn_ref, stream_ref: stream_ref, task: task} =
+           device,
+         delay \\ 0
+       ) do
     Logger.debug("Recycle device")
 
     if task != nil do
@@ -439,6 +443,13 @@ defmodule Stressgrid.Generator.Device do
 
     if conn_ref != nil do
       true = Process.demonitor(conn_ref, [:flush])
+
+      if stream_ref == nil do
+        %{socket: socket} = :gun.info(conn_pid)
+        :gun_tcp.setopts(socket, [{:linger, {true, 0}}])
+        :gun_tcp.close(socket)
+      end
+
       _ = :gun.shutdown(conn_pid)
     end
 
