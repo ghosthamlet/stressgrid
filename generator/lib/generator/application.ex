@@ -21,7 +21,6 @@ defmodule Stressgrid.Generator.Application do
       end
 
     children = [
-      {Task.Supervisor, name: Script.Supervisor},
       Cohort.Supervisor,
       {Connection, id: id, host: host, port: port}
     ]

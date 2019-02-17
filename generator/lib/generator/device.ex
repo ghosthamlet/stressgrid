@@ -1,7 +1,7 @@
 defmodule Stressgrid.Generator.Device do
   @moduledoc false
 
-  alias Stressgrid.Generator.{Device, DeviceContext, Script}
+  alias Stressgrid.Generator.{Device, DeviceContext}
 
   use GenServer
   require Logger
@@ -9,8 +9,7 @@ defmodule Stressgrid.Generator.Device do
   @recycle_delay 1_000
 
   defstruct address: nil,
-            task_script: nil,
-            task_params: nil,
+            task_fn: nil,
             task: nil,
             hists: %{},
             counters: %{},
@@ -28,20 +27,15 @@ defmodule Stressgrid.Generator.Device do
   end
 
   def init(args) do
-    _ = Kernel.send(self(), :init)
+    id = args |> Keyword.fetch!(:id)
+    task_script = args |> Keyword.fetch!(:script)
+    task_params = args |> Keyword.fetch!(:params)
 
-    Logger.debug("Init device #{args |> Keyword.fetch!(:id)}")
+    _ = Kernel.send(self(), {:init, id, task_script, task_params})
 
     {:ok,
      %Device{
-       address: args |> Keyword.fetch!(:address),
-       task_script: args |> Keyword.fetch!(:script),
-       task_params: args |> Keyword.fetch!(:params),
-       hists: %{
-         conn_us: make_hist(),
-         headers_us: make_hist(),
-         body_us: make_hist()
-       }
+       address: args |> Keyword.fetch!(:address)
      }}
   end
 
@@ -111,49 +105,8 @@ defmodule Stressgrid.Generator.Device do
     end
   end
 
-  def handle_info(
-        :init,
-        %Device{conn_pid: nil, address: {:tcp, host, port}, last_ts: nil} = device
-      ) do
-    Logger.debug("Open gun #{host}:#{port}")
-
-    ts = :os.system_time(:micro_seconds)
-
-    {:ok, conn_pid} =
-      :gun.open(host |> String.to_charlist(), port, %{
-        retry: 0,
-        http_opts: %{keepalive: :infinity}
-      })
-
-    conn_ref = :erlang.monitor(:process, conn_pid)
-    {:noreply, %{device | conn_pid: conn_pid, conn_ref: conn_ref, last_ts: ts}}
-  end
-
-  def handle_info({task_ref, :ok}, %Device{task: %Task{ref: task_ref}} = device)
-      when is_reference(task_ref) do
-    Logger.debug("Script exited normally")
-
-    true = :erlang.demonitor(task_ref, [:flush])
-    device = %{device | task: nil}
-
-    {:noreply,
-     device
-     |> recycle()}
-  end
-
-  def handle_info(
-        {:gun_up, conn_pid, _protocol},
-        %Device{
-          task_script: task_script,
-          task_params: task_params,
-          conn_pid: conn_pid,
-          last_ts: last_ts
-        } = device
-      )
-      when last_ts != nil do
-    Logger.debug("Gun up")
-
-    ts = :os.system_time(:micro_seconds)
+  def handle_info({:init, id, task_script, task_params}, device) do
+    Logger.debug("Init device #{id}")
 
     %Macro.Env{functions: functions, macros: macros} = __ENV__
 
@@ -173,43 +126,113 @@ defmodule Stressgrid.Generator.Device do
 
     device_pid = self()
 
+    try do
+      {task_fn, _} =
+        "fn ->\r\n#{task_script}\r\nend"
+        |> Code.eval_string([device_pid: device_pid, params: task_params],
+          functions: [
+            kernel_functions,
+            {DeviceContext,
+             [
+               delay: 1,
+               delay: 2
+             ]
+             |> Enum.sort()}
+          ],
+          macros: [
+            kernel_macros,
+            {DeviceContext,
+             [
+               get: 1,
+               get: 2,
+               options: 1,
+               options: 2,
+               delete: 1,
+               delete: 2,
+               post: 1,
+               post: 2,
+               post: 3,
+               put: 1,
+               put: 2,
+               put: 3,
+               patch: 1,
+               patch: 2,
+               patch: 3
+             ]
+             |> Enum.sort()}
+          ]
+        )
+
+      _ = Kernel.send(self(), :open)
+
+      {:noreply,
+       %{
+         device
+         | task_fn: task_fn,
+           hists: %{
+             conn_us: make_hist(),
+             headers_us: make_hist(),
+             body_us: make_hist()
+           }
+       }}
+    catch
+      :error, error ->
+        Logger.error("Script eval failed: #{inspect(error)}")
+
+        {:noreply, device}
+    end
+  end
+
+  def handle_info(
+        :open,
+        %Device{conn_pid: nil, address: {:tcp, host, port}, last_ts: nil} = device
+      ) do
+    Logger.debug("Open gun #{host}:#{port}")
+
+    ts = :os.system_time(:micro_seconds)
+
+    {:ok, conn_pid} =
+      :gun.start_link(self(), host |> String.to_charlist(), port, %{
+        retry: 0,
+        http_opts: %{keepalive: :infinity}
+      })
+
+    conn_ref = Process.monitor(conn_pid)
+    true = Process.unlink(conn_pid)
+
+    {:noreply, %{device | conn_pid: conn_pid, conn_ref: conn_ref, last_ts: ts}}
+  end
+
+  def handle_info({task_ref, :ok}, %Device{task: %Task{ref: task_ref}} = device)
+      when is_reference(task_ref) do
+    Logger.debug("Script exited normally")
+
+    true = Process.demonitor(task_ref, [:flush])
+    device = %{device | task: nil}
+
+    {:noreply,
+     device
+     |> recycle()}
+  end
+
+  def handle_info(
+        {:gun_up, conn_pid, _protocol},
+        %Device{
+          task_fn: task_fn,
+          conn_pid: conn_pid,
+          last_ts: last_ts
+        } = device
+      )
+      when last_ts != nil do
+    Logger.debug("Gun up")
+
+    ts = :os.system_time(:micro_seconds)
+
     task =
-      Task.Supervisor.async_nolink(Script.Supervisor, fn ->
+      %Task{pid: task_pid} =
+      Task.async(fn ->
         try do
-          task_script
-          |> Code.eval_string([device_pid: device_pid, params: task_params],
-            functions: [
-              kernel_functions,
-              {DeviceContext,
-               [
-                 delay: 1,
-                 delay: 2
-               ]
-               |> Enum.sort()}
-            ],
-            macros: [
-              kernel_macros,
-              {DeviceContext,
-               [
-                 get: 1,
-                 get: 2,
-                 options: 1,
-                 options: 2,
-                 delete: 1,
-                 delete: 2,
-                 post: 1,
-                 post: 2,
-                 post: 3,
-                 put: 1,
-                 put: 2,
-                 put: 3,
-                 patch: 1,
-                 patch: 2,
-                 patch: 3
-               ]
-               |> Enum.sort()}
-            ]
-          )
+          task_fn.()
         catch
           :exit, :device_terminated ->
             :ok
@@ -217,6 +240,8 @@ defmodule Stressgrid.Generator.Device do
 
         :ok
       end)
+
+    true = Process.unlink(task_pid)
 
     {:noreply,
      %{device | last_ts: nil, task: task}
@@ -338,19 +363,12 @@ defmodule Stressgrid.Generator.Device do
           }
         } = device
       ) do
-    case reason do
-      {%SyntaxError{description: description}, _} ->
-        Logger.error("Script syntax error: #{description}")
-        {:noreply, device}
+    Logger.error("Script exited with #{inspect(reason)}")
 
-      error ->
-        Logger.error("Script exited with #{inspect(error)}")
-
-        {:noreply,
-         device
-         |> recycle(@recycle_delay)
-         |> inc_counter(:task_error_count, 1)}
-    end
+    {:noreply,
+     device
+     |> recycle(@recycle_delay)
+     |> inc_counter(:task_error_count, 1)}
   end
 
   def handle_info(
@@ -419,11 +437,11 @@ defmodule Stressgrid.Generator.Device do
     end
 
     if conn_ref != nil do
-      true = :erlang.demonitor(conn_ref, [:flush])
-      _ = :gun.close(conn_pid)
+      true = Process.demonitor(conn_ref, [:flush])
+      _ = :gun.shutdown(conn_pid)
     end
 
-    _ = Process.send_after(self(), :init, delay)
+    _ = Process.send_after(self(), :open, delay)
 
     %{
       device
