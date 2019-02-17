@@ -10,10 +10,7 @@ cd /opt/stressgrid/generator
 sudo -u stressgrid tar -xvf /tmp/generator.tar.gz &>/dev/null
 rm /tmp/generator.tar.gz
 echo "
-net.ipv4.ip_local_port_range=\"15000 65000\"
-net.ipv4.tcp_fin_timeout=30
-net.ipv4.tcp_tw_recycle=1
-net.ipv4.tcp_tw_reuse=1
+net.ipv4.ip_local_port_range=15000 65000
 " > /etc/sysctl.d/10-stressgrid-generator.conf
 sysctl -p /etc/sysctl.d/10-stressgrid-generator.conf
 echo "[Unit]
